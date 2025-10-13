@@ -56,7 +56,7 @@ pub fn to_string(val: &LLSDValue, do_indent: bool) -> Result<String, Error> {
 }
 
 /// Generate one <TYPE> VALUE </TYPE> output. VALUE is recursive.
-fn generate_value<W: Write>(writer: &mut W, val: &LLSDValue, spaces: usize, indent: usize) {
+pub fn generate_value<W: Write>(writer: &mut W, val: &LLSDValue, spaces: usize, indent: usize) {
     //  Output a single tag
     fn tag<W: Write>(writer: &mut W, tag: &str, close: bool, indent: usize) {
         if indent > 0 {
@@ -133,7 +133,7 @@ fn generate_value<W: Write>(writer: &mut W, val: &LLSDValue, spaces: usize, inde
 }
 
 /// XML standard character escapes.
-fn xml_escape(unescaped: &str) -> String {
+pub fn xml_escape(unescaped: &str) -> String {
     let mut s = String::new();
     for ch in unescaped.chars() {
         match ch {

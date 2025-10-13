@@ -35,7 +35,7 @@ pub fn from_str(xmlstr: &str) -> Result<LLSDValue, Error> {
 ////let mut reader = Reader::from_str(xmlstr);
 
 /// Read XML from buffered source and parse into LLSDValue.
-pub fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
+fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
     let mut reader = Reader::from_reader(rdr); // create an XML reader from a sequential reader
     reader.trim_text(true); // do not want trailing blanks
     reader.expand_empty_elements(true); // want end tag events always
@@ -110,7 +110,7 @@ fn parse_value<R: BufRead>(
         "undef" | "real" | "integer" | "boolean" | "string" | "uri" | "binary" | "uuid"
         | "date" => parse_primitive_value(reader, starttag, attrs),
         "map" => parse_map(reader),
-        "array" => parse_array(reader),
+        "array" => parse_array(reader, parse_value),
         _ => Err(anyhow!(
             "Unknown data type <{}> at position {}",
             starttag,
@@ -201,7 +201,7 @@ fn parse_primitive_value<R: BufRead>(
 }
 
 //  Parse one map.
-fn parse_map<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<LLSDValue, Error> {
+pub fn parse_map<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<LLSDValue, Error> {
     //  Entered with a "map" start tag just parsed.
     let mut map: HashMap<String, LLSDValue> = HashMap::new(); // accumulating map
     let mut texts = Vec::new(); // accumulate text here
@@ -258,7 +258,9 @@ fn parse_map<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<LLSDValue, Error
 
 //  Parse one map entry.
 //  Format <key> STRING </key> LLSDVALUE
-fn parse_map_entry<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<(String, LLSDValue), Error> {
+pub fn parse_map_entry<R: BufRead>(
+    reader: &mut Reader<&mut R>,
+) -> Result<(String, LLSDValue), Error> {
     //  Entered with a "key" start tag just parsed.  Expecting text.
     let mut texts = Vec::new(); // accumulate text here
     let mut buf = Vec::new();
@@ -319,7 +321,11 @@ fn parse_map_entry<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<(String, L
 }
 
 /// Parse one LLSD object. Recursive.
-fn parse_array<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<LLSDValue, Error> {
+pub fn parse_array<R, F>(reader: &mut Reader<&mut R>, parse_value: F) -> Result<LLSDValue, Error>
+where
+    R: BufRead,
+    F: Fn(&mut Reader<&mut R>, &str, &Attributes) -> Result<LLSDValue, Error>,
+{
     //  Entered with an <array> tag just parsed.
     let mut texts = Vec::new(); // accumulate text here
     let mut buf = Vec::new();
@@ -373,7 +379,7 @@ fn parse_array<R: BufRead>(reader: &mut Reader<&mut R>) -> Result<LLSDValue, Err
 
 /// Parse binary object.
 /// Input in base64, base16, or base85.
-fn parse_binary(s: &str, attrs: &Attributes) -> Result<Vec<u8>, Error> {
+pub fn parse_binary(s: &str, attrs: &Attributes) -> Result<Vec<u8>, Error> {
     // "Parsers must support base64 encoding. Parsers may support base16 and base85."
     let encoding = match get_attr(attrs, b"encoding")? {
         Some(enc) => enc,
@@ -397,22 +403,22 @@ fn parse_binary(s: &str, attrs: &Attributes) -> Result<Vec<u8>, Error> {
 }
 
 /// Parse ISO 9660 date, simple form.
-fn parse_date(s: &str) -> Result<i64, Error> {
+pub fn parse_date(s: &str) -> Result<i64, Error> {
     Ok(chrono::DateTime::parse_from_rfc3339(s)?.timestamp())
 }
 
 /// Parse integer. LSL allows the empty string as 0.
-fn parse_integer(s: &str) -> Result<i32, Error> {
+pub fn parse_integer(s: &str) -> Result<i32, Error> {
     let s = s.trim();
     if s.is_empty() {
-        Ok(0)               // empty string
+        Ok(0) // empty string
     } else {
-        Ok(s.parse::<i32>()?)    // nonempty string
+        Ok(s.parse::<i32>()?) // nonempty string
     }
 }
 
 ///  Parse boolean. LSL allows 0. 0.0, false, 1. 1.0, true.
-fn parse_boolean(s: &str) -> Result<bool, Error> {
+pub fn parse_boolean(s: &str) -> Result<bool, Error> {
     Ok(match s {
         "0" | "0.0" => false,
         "1" | "1.0" => true,
@@ -439,7 +445,6 @@ fn get_attr(attrs: &Attributes, key: &[u8]) -> Result<Option<String>, Error> {
 
 #[test]
 fn xmlparsetest1() {
-
     const TESTXMLZERO: &str = r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <llsd>
@@ -451,7 +456,7 @@ fn xmlparsetest1() {
 </llsd>
 "#;
 
-    const TESTXMLZEROARRAY: [i32;3] = [ 0, 100, 0 ]; // expected values
+    const TESTXMLZEROARRAY: [i32; 3] = [0, 100, 0]; // expected values
 
     const TESTXMLNAN: &str = r#"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -527,12 +532,13 @@ fn xmlparsetest1() {
     trytestcase(TESTXML1);
     //  Special test cases.
     //  Test zero case, where an empty <integer /> is 0, per spec.
-    {   let parsed0 = from_str(TESTXMLZERO).unwrap();
+    {
+        let parsed0 = from_str(TESTXMLZERO).unwrap();
         println!("Parse of {}: \n{:#?}", TESTXMLZERO, parsed0);
-        let arr = parsed0.as_array().unwrap();  // yields array of LLSD values
-        assert_eq!(arr.len() , TESTXMLZEROARRAY.len()); // lengths must match
+        let arr = parsed0.as_array().unwrap(); // yields array of LLSD values
+        assert_eq!(arr.len(), TESTXMLZEROARRAY.len()); // lengths must match
         for (item, n) in arr.iter().zip(TESTXMLZEROARRAY) {
-            assert_eq!(n, *(item.as_integer().unwrap()));  // must match
+            assert_eq!(n, *(item.as_integer().unwrap())); // must match
         }
     }
     //  Test NAN case
@@ -546,6 +552,4 @@ fn xmlparsetest1() {
         let s2 = generated.replace(" ", "").replace("\n", "");
         assert_eq!(s1, s2);
     }
-
-    
 }

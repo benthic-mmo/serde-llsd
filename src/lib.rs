@@ -19,20 +19,20 @@ pub mod ser;
 
 pub use crate::{
     de::{
-        auto_from_bytes, auto_from_str,
+        auto_from_bytes,
+        auto_from_str,
         binary::from_bytes as binary_from_bytes,
         binary::from_reader as binary_from_reader, // Name clash
-        xml::from_reader,
-        xml::from_str,
         notation::from_bytes as notation_from_bytes,
         notation::from_str as notation_from_str,
+        xml::from_str,
     },
     ser::{
         binary::to_bytes,
-        binary::to_writer as binary_to_writer, // Name clash
+        binary::to_writer as binary_to_writer,     // Name clash
+        notation::to_string as notation_to_string, // Name clash
         xml::to_string,
         xml::to_writer,
-        notation::to_string as notation_to_string, // Name clash
     },
 };
 

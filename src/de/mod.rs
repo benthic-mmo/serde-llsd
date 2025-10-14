@@ -1,31 +1,45 @@
 //! #De-serialization. Converts an LLSD stream to tree of LLSDValue structs.
 pub mod binary;
-pub mod xml;
 pub mod notation;
+pub mod xml;
+pub mod xml_rpc;
 
 use anyhow::{anyhow, Error};
+
+use crate::de::xml_rpc::XMLRPCPREFIX;
 
 /// Parse LLSD, detecting format.
 /// Recognizes Notation, and XML LLSD with sentinels.
 /// Will accept leading whitespace.
 pub fn auto_from_str(msg_string: &str) -> Result<crate::LLSDValue, Error> {
-    let msg_string = msg_string.trim_start();   // remove leading whitespace
-    //  Try Notation sentinel. Tolerate missing newline at end of sentinel.
+    let msg_string = msg_string.trim_start(); // remove leading whitespace
+                                              //  Try Notation sentinel. Tolerate missing newline at end of sentinel.
     if let Some(stripped) = msg_string.strip_prefix(notation::LLSDNOTATIONSENTINEL.trim_end()) {
         return notation::from_str(stripped);
     }
     //  Try XML sentinel.
     if msg_string.starts_with(xml::LLSDXMLSENTINEL) {
-        // try XML
-        return xml::from_str(msg_string);
+        // try XML if it has an LLSDXML prefix
+        if msg_string.starts_with(xml::LLSDXMLPREFIX) {
+            return xml::from_str(msg_string);
+        }
+
+        // try XMLRPC if it has a XMLRPC prefix
+        if msg_string.starts_with(xml_rpc::XMLRPCPREFIX)
+            || msg_string.starts_with(xml_rpc::XMLRPCPREFIX2)
+            || msg_string.starts_with(xml_rpc::XMLRPCPREFIX3)
+        {
+            return xml_rpc::from_str(msg_string);
+        }
     }
+
     //  Trim string to N chars for error msg.
     let snippet = msg_string
         .chars()
         .zip(0..60)
         .map(|(c, _)| c)
         .collect::<String>();
-    Err(anyhow!("LLSD format not recognized: {:?}", snippet))
+    Err(anyhow!("XML format not recognized: {:?}", snippet))
 }
 
 /// Parse LLSD, detecting format.
@@ -39,22 +53,21 @@ pub fn auto_from_bytes(msg: &[u8]) -> Result<crate::LLSDValue, Error> {
     {
         return binary::from_bytes(&msg[binary::LLSDBINARYSENTINEL.len()..]);
     }
-    //  For text forms, tolerate leading whitespace.      
-    {   let msg = trim_ascii_start(msg);               // remove leading whitespace if any
-        //  Try Notation sentinel. Tolerate trailing newline. 
-        let sentinel = notation::LLSDNOTATIONSENTINEL.trim_end().as_bytes();  // sentinel without the trailing newline
-        if msg.len() >= sentinel.len()
-            && &msg[0..sentinel.len()] == sentinel
-        {
+    //  For text forms, tolerate leading whitespace.
+    {
+        let msg = trim_ascii_start(msg); // remove leading whitespace if any
+                                         //  Try Notation sentinel. Tolerate trailing newline.
+        let sentinel = notation::LLSDNOTATIONSENTINEL.trim_end().as_bytes(); // sentinel without the trailing newline
+        if msg.len() >= sentinel.len() && &msg[0..sentinel.len()] == sentinel {
             return notation::from_bytes(&msg[sentinel.len()..]);
         }
         //  Try XML sentinel.
         let msgstring = std::str::from_utf8(msg)?; // convert to UTF-8 string
         if msgstring.trim_start().starts_with(xml::LLSDXMLSENTINEL) {
-        // try XML
+            // try XML
             return xml::from_str(msgstring);
         }
-    }   
+    }
     //  Check for binary without header. If array or map marker, parse.
     if msg.len() > 1 {
         match msg[0] {
@@ -63,7 +76,7 @@ pub fn auto_from_bytes(msg: &[u8]) -> Result<crate::LLSDValue, Error> {
             _ => {}
         }
     }
-    
+
     //  Trim string to N chars for error msg.
     let snippet = String::from_utf8_lossy(msg)
         .chars()
@@ -73,7 +86,7 @@ pub fn auto_from_bytes(msg: &[u8]) -> Result<crate::LLSDValue, Error> {
     Err(anyhow!("LLSD format not recognized: {:?}", snippet))
 }
 
-/// Trim ASCII whitespace from string. 
+/// Trim ASCII whitespace from string.
 /// From an unstable Rust feature soon to become standard.
 fn trim_ascii_start(b: &[u8]) -> &[u8] {
     let mut bytes = b;
@@ -86,7 +99,6 @@ fn trim_ascii_start(b: &[u8]) -> &[u8] {
     }
     bytes
 }
-
 
 #[test]
 fn testpbrmaterialdecode() {
@@ -131,12 +143,12 @@ fn testnotationdetect1() {
 "#;
     let parsed_sa = auto_from_str(TESTNOTATION1A).unwrap();
     let parsed_sb = auto_from_str(TESTNOTATION1B).unwrap();
-    assert_eq!(parsed_sa, parsed_sb);              // must match, with and without trailing whitespace.
+    assert_eq!(parsed_sa, parsed_sb); // must match, with and without trailing whitespace.
     let s = crate::notation_to_string(&parsed_sa).unwrap();
-    assert_eq!(TESTNOTATION1A, s);                 // check round-trip
+    assert_eq!(TESTNOTATION1A, s); // check round-trip
     let parsed_ba = auto_from_bytes(TESTNOTATION1A.as_bytes()).unwrap();
     let parsed_bb = auto_from_bytes(TESTNOTATION1B.as_bytes()).unwrap();
-    assert_eq!(parsed_ba, parsed_bb);              // must match, with and without trailing whitespace.
-    ////let b = crate::notation_to_bytes(&parsed_ba).unwrap();
-    ////assert_eq!(TESTNOTATION1A.as_bytes(), b);         // must match correct form
+    assert_eq!(parsed_ba, parsed_bb); // must match, with and without trailing whitespace.
+                                      ////let b = crate::notation_to_bytes(&parsed_ba).unwrap();
+                                      ////assert_eq!(TESTNOTATION1A.as_bytes(), b);         // must match correct form
 }

@@ -14,6 +14,7 @@
 //
 //  Modules
 //
+pub mod converter;
 pub mod de;
 pub mod ser;
 

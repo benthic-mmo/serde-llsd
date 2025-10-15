@@ -1,12 +1,13 @@
 //! #De-serialization. Converts an LLSD stream to tree of LLSDValue structs.
 pub mod binary;
+pub mod newline;
 pub mod notation;
 pub mod xml;
 pub mod xml_rpc;
 
 use anyhow::{anyhow, Error};
 
-use crate::de::xml_rpc::XMLRPCPREFIX;
+use crate::de::newline::parse_llwearable_to_llsd;
 
 /// Parse LLSD, detecting format.
 /// Recognizes Notation, and XML LLSD with sentinels.
@@ -31,6 +32,10 @@ pub fn auto_from_str(msg_string: &str) -> Result<crate::LLSDValue, Error> {
         {
             return xml_rpc::from_str(msg_string);
         }
+    }
+
+    if msg_string.starts_with(newline::LLSDNEWLINEPREFIX) {
+        return parse_llwearable_to_llsd(msg_string);
     }
 
     //  Trim string to N chars for error msg.

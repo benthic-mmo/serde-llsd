@@ -1,7 +1,6 @@
 use crate::{ser::xml::xml_escape, LLSDValue};
 use anyhow::Error;
 use base64::Engine;
-use chrono::TimeZone;
 use std::io::Write;
 
 pub fn to_string(val: &LLSDValue, do_indent: bool, method_name: &str) -> Result<String, Error> {

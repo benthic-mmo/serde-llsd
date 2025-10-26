@@ -18,7 +18,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-////use uuid;
+///use uuid;
 //
 //  Constants
 //
@@ -51,10 +51,7 @@ fn flatten_login_response(value: LLSDValue) -> LLSDValue {
     }
 }
 /// Read XML from buffered source and parse into LLSDValue.
-fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error>
-where
-    R: BufRead,
-{
+fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
     let mut reader = Reader::from_reader(rdr); // create an XML reader from a sequential reader
     reader.trim_text(true); // do not want trailing blanks
     reader.expand_empty_elements(true); // want end tag events always
@@ -117,7 +114,7 @@ where
     }
 }
 /// Parse one value - real, integer, map, etc. Recursive.
-////fn parse_value<R: Read+BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
+///fn parse_value<R: Read+BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
 fn parse_value<R: BufRead>(
     reader: &mut Reader<&mut R>,
     starttag: &str,

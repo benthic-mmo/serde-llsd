@@ -81,7 +81,7 @@ fn generate_value<W: Write>(writer: &mut W, val: &LLSDValue) -> Result<(), Error
             writer.write_all(&(v.len() as u32).to_be_bytes())?;
             //  Output key/value pairs
             for (key, value) in v {
-                writer.write_all(&[b'k'])?; // k prefix to key. UNDOCUMENTED
+                writer.write_all(b"k")?; // k prefix to key. UNDOCUMENTED
                 writer.write_all(&(key.len() as u32).to_be_bytes())?;
                 writer.write_all(key.as_bytes())?;
                 generate_value(writer, value)?;

@@ -13,15 +13,15 @@
 //
 use crate::LLSDValue;
 use anyhow::Error;
-use chrono::{TimeZone};
 use base64::Engine;
+use chrono::TimeZone;
 //
 //  Constants
 //
 /// Notation LLSD prefix
-pub const LLSDNOTATIONPREFIX: &str = "<? llsd/notation ?>\n"; 
+pub const LLSDNOTATIONPREFIX: &str = "<? llsd/notation ?>\n";
 /// Sentinel, must match exactly.
-pub const LLSDNOTATIONSENTINEL: &str = LLSDNOTATIONPREFIX; 
+pub const LLSDNOTATIONSENTINEL: &str = LLSDNOTATIONPREFIX;
 
 /// Outputs an LLSDValue as a string of bytes, in LLSD "notation" format.
 pub fn to_string(val: &LLSDValue) -> Result<String, Error> {
@@ -62,11 +62,11 @@ fn generate_value(writer: &mut String, val: &LLSDValue) -> Result<(), Error> {
         }
         LLSDValue::Integer(v) => {
             writer.push('i');
-            writer.push_str(&format!("{}",v));
+            writer.push_str(&format!("{}", v));
         }
         LLSDValue::Real(v) => {
             writer.push('r');
-            writer.push_str(&format!("{}",v));
+            writer.push_str(&format!("{}", v));
         }
         LLSDValue::UUID(v) => {
             writer.push('u');
@@ -82,11 +82,13 @@ fn generate_value(writer: &mut String, val: &LLSDValue) -> Result<(), Error> {
         }
         LLSDValue::Date(v) => {
             writer.push('d');
-            writer.push_str(&chrono::Utc
-                .timestamp_opt(*v, 0)
-                .earliest()
-                .unwrap() // may panic for times prior to January 1, 1970.
-                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+            writer.push_str(
+                &chrono::Utc
+                    .timestamp_opt(*v, 0)
+                    .earliest()
+                    .unwrap() // may panic for times prior to January 1, 1970.
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            )
         }
 
         //  Map is {  key : value, key : value ... }
@@ -121,7 +123,7 @@ fn generate_value(writer: &mut String, val: &LLSDValue) -> Result<(), Error> {
                     writer.push('\n');
                 }
                 first = false;
-                generate_value(writer, value)?;           
+                generate_value(writer, value)?;
             }
             writer.push(']');
         }
@@ -134,10 +136,13 @@ fn escape_quotes(s: &str) -> String {
     let mut writer = String::new();
     for ch in s.chars() {
         match ch {
-            '"' | '\\' => { writer.push('\\'); writer.push(ch) }
-            _ => writer.push(ch)
+            '"' | '\\' => {
+                writer.push('\\');
+                writer.push(ch)
+            }
+            _ => writer.push(ch),
         }
-    }     
+    }
     writer
 }
 
@@ -227,7 +232,7 @@ fn notationgentest1() {
     trytestcase(TESTXML1);
     //  Test NAN case
     {
-        let parsed1 =  crate::de::xml::from_str(TESTXMLNAN).unwrap();
+        let parsed1 = crate::de::xml::from_str(TESTXMLNAN).unwrap();
         println!("Parse of {}: \n{:#?}", TESTXMLNAN, parsed1);
         //  Generate XML back from parsed version.
         let generated = crate::ser::notation::to_string(&parsed1).unwrap();

@@ -22,7 +22,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
-////use uuid;
+///use uuid;
 //
 //  Constants
 //
@@ -32,7 +32,6 @@ pub const LLSDXMLSENTINEL: &str = "<?xml"; // Must begin with this.
 pub fn from_str(xmlstr: &str) -> Result<LLSDValue, Error> {
     from_reader(&mut BufReader::new(xmlstr.as_bytes()))
 }
-////let mut reader = Reader::from_str(xmlstr);
 
 /// Read XML from buffered source and parse into LLSDValue.
 fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
@@ -99,7 +98,7 @@ fn from_reader<R: BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
 }
 
 /// Parse one value - real, integer, map, etc. Recursive.
-////fn parse_value<R: Read+BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
+///fn parse_value<R: Read+BufRead>(rdr: &mut R) -> Result<LLSDValue, Error> {
 fn parse_value<R: BufRead>(
     reader: &mut Reader<&mut R>,
     starttag: &str,

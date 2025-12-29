@@ -30,7 +30,11 @@ pub const LLSDXMLPREFIX: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ll
 pub const LLSDXMLSENTINEL: &str = "<?xml"; // Must begin with this.
 ///    Parse LLSD expressed in XML into an LLSD tree.
 pub fn from_str(xmlstr: &str) -> Result<LLSDValue, Error> {
-    from_reader(&mut BufReader::new(xmlstr.as_bytes()))
+    let result = from_reader(&mut BufReader::new(xmlstr.as_bytes()));
+    if let Err(e) = &result {
+        return Err(anyhow::anyhow!("{}: {}", e, xmlstr));
+    }
+    result
 }
 
 /// Read XML from buffered source and parse into LLSDValue.

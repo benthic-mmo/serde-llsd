@@ -1,6 +1,6 @@
 [package]
 name = "serde-llsd-benthic"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["John-Nagle <nagle@animats.com>, wgahnagl"]
 description = "Library for serializing and de-serializing data in Linden Lab Structured Data format. This format is used by Second Life and Open Simulator"

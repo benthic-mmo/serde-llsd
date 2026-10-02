@@ -5,14 +5,14 @@ pub mod notation;
 pub mod xml;
 pub mod xml_rpc;
 
-use anyhow::{anyhow, Error};
+use anyhow::anyhow;
 
-use crate::de::newline::parse_llwearable_to_llsd;
+use crate::{de::newline::parse_llwearable_to_llsd, errors::ParseError, parse};
 
 /// Parse LLSD, detecting format.
 /// Recognizes Notation, and XML LLSD with sentinels.
 /// Will accept leading whitespace.
-pub fn auto_from_str(msg_string: &str) -> Result<crate::LLSDValue, Error> {
+pub fn auto_from_str(msg_string: &str) -> Result<crate::LLSDValue, ParseError> {
     let msg_string = msg_string.trim_start(); // remove leading whitespace
                                               //  Try Notation sentinel. Tolerate missing newline at end of sentinel.
     if let Some(stripped) = msg_string.strip_prefix(notation::LLSDNOTATIONSENTINEL.trim_end()) {
@@ -44,51 +44,60 @@ pub fn auto_from_str(msg_string: &str) -> Result<crate::LLSDValue, Error> {
         .zip(0..60)
         .map(|(c, _)| c)
         .collect::<String>();
-    Err(anyhow!("XML format not recognized: {:?}", snippet))
+    Err(ParseError::new(anyhow!(
+        "XML format not recognized: {:?}",
+        snippet
+    )))
 }
 
 /// Parse LLSD, detecting format.
 /// Recognizes binary, Notation, and XML LLSD, with or without sentinel.
 /// Will accept leading whitespace for text forms, but not binary. That's strict.
-pub fn auto_from_bytes(msg: &[u8]) -> Result<crate::LLSDValue, Error> {
-    //  Try sentinels first.
-    //  Binary sentinel
+pub fn auto_from_bytes(msg: &[u8]) -> Result<crate::LLSDValue, ParseError> {
+    // Try sentinels first.
     if msg.len() >= binary::LLSDBINARYSENTINEL.len()
         && &msg[0..binary::LLSDBINARYSENTINEL.len()] == binary::LLSDBINARYSENTINEL
     {
         return binary::from_bytes(&msg[binary::LLSDBINARYSENTINEL.len()..]);
     }
-    //  For text forms, tolerate leading whitespace.
+
+    // For text forms, tolerate leading whitespace.
     {
-        let msg = trim_ascii_start(msg); // remove leading whitespace if any
-                                         //  Try Notation sentinel. Tolerate trailing newline.
-        let sentinel = notation::LLSDNOTATIONSENTINEL.trim_end().as_bytes(); // sentinel without the trailing newline
+        let msg = trim_ascii_start(msg);
+
+        // Try Notation sentinel.
+        let sentinel = notation::LLSDNOTATIONSENTINEL.trim_end().as_bytes();
+
         if msg.len() >= sentinel.len() && &msg[0..sentinel.len()] == sentinel {
-            return notation::from_bytes(&msg[sentinel.len()..]);
+            return parse!(notation::from_bytes(&msg[sentinel.len()..]));
         }
-        //  Try XML sentinel.
-        let msgstring = std::str::from_utf8(msg)?; // convert to UTF-8 string
+
+        // Try XML sentinel.
+        let msgstring = parse!(std::str::from_utf8(msg))?;
+
         if msgstring.trim_start().starts_with(xml::LLSDXMLSENTINEL) {
-            // try XML
-            return xml::from_str(msgstring);
+            return parse!(xml::from_str(msgstring));
         }
     }
-    //  Check for binary without header. If array or map marker, parse.
+
+    // Check for binary without header.
     if msg.len() > 1 {
         match msg[0] {
-            // check first char
             b'{' | b'[' => return binary::from_bytes(msg),
             _ => {}
         }
     }
 
-    //  Trim string to N chars for error msg.
     let snippet = String::from_utf8_lossy(msg)
         .chars()
         .zip(0..60)
         .map(|(c, _)| c)
         .collect::<String>();
-    Err(anyhow!("LLSD format not recognized: {:?}", snippet))
+
+    Err(ParseError::new(anyhow!(
+        "LLSD format not recognized: {:?}",
+        snippet
+    )))
 }
 
 /// Trim ASCII whitespace from string.

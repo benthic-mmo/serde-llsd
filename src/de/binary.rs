@@ -11,7 +11,8 @@
 //  March, 2021.
 //  License: LGPL.
 //
-use crate::LLSDValue;
+use crate::errors::ParseError;
+use crate::{parse, LLSDValue};
 use anyhow::{anyhow, Error};
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
@@ -23,121 +24,143 @@ pub const LLSDBINARYPREFIX: &[u8] = b"<? LLSD/Binary ?>\n"; // binary LLSD prefi
 pub const LLSDBINARYSENTINEL: &[u8] = LLSDBINARYPREFIX; // prefix must match exactly
 
 ///    Parse LLSD array expressed in binary into an LLSDObject tree. No header.
-pub fn from_bytes(b: &[u8]) -> Result<LLSDValue, Error> {
+pub fn from_bytes(b: &[u8]) -> Result<LLSDValue, ParseError> {
     let mut cursor: Cursor<&[u8]> = Cursor::new(b);
     parse_value(&mut cursor)
 }
 
 ///    Parse LLSD reader expressed in binary into an LLSDObject tree. No header.
-pub fn from_reader(cursor: &mut dyn Read) -> Result<LLSDValue, Error> {
+pub fn from_reader(cursor: &mut dyn Read) -> Result<LLSDValue, ParseError> {
     parse_value(cursor)
 }
 
 /// Parse one value - real, integer, map, etc. Recursive.
-fn parse_value(cursor: &mut dyn Read) -> Result<LLSDValue, Error> {
-    //  These could be generic if generics with numeric parameters were in stable Rust.
+fn parse_value(cursor: &mut dyn Read) -> Result<LLSDValue, ParseError> {
+    // These could be generic if generics with numeric parameters were in stable Rust.
     fn read_u8(cursor: &mut dyn Read) -> Result<u8, Error> {
         let mut b: [u8; 1] = [0; 1];
-        cursor.read_exact(&mut b)?; // read one byte
+        cursor.read_exact(&mut b)?;
         Ok(b[0])
     }
+
     fn read_u32(cursor: &mut dyn Read) -> Result<u32, Error> {
         let mut b: [u8; 4] = [0; 4];
-        cursor.read_exact(&mut b)?; // read one byte
+        cursor.read_exact(&mut b)?;
         Ok(u32::from_be_bytes(b))
     }
+
     fn read_i32(cursor: &mut dyn Read) -> Result<i32, Error> {
         let mut b: [u8; 4] = [0; 4];
-        cursor.read_exact(&mut b)?; // read one byte
+        cursor.read_exact(&mut b)?;
         Ok(i32::from_be_bytes(b))
     }
+
     fn read_i64(cursor: &mut dyn Read) -> Result<i64, Error> {
         let mut b: [u8; 8] = [0; 8];
-        cursor.read_exact(&mut b)?; // read one byte
+        cursor.read_exact(&mut b)?;
         Ok(i64::from_be_bytes(b))
     }
+
     fn read_f64(cursor: &mut dyn Read) -> Result<f64, Error> {
         let mut b: [u8; 8] = [0; 8];
-        cursor.read_exact(&mut b)?; // read one byte
+        cursor.read_exact(&mut b)?;
         Ok(f64::from_be_bytes(b))
     }
+
     fn read_variable(cursor: &mut dyn Read) -> Result<Vec<u8>, Error> {
-        let length = read_u32(cursor)?; // read length in bytes
+        let length = read_u32(cursor)?;
         let mut buf = vec![0u8; length as usize];
         cursor.read_exact(&mut buf)?;
-        Ok(buf) // read bytes of string
+        Ok(buf)
     }
 
-    let typecode = read_u8(cursor)?;
+    let typecode = parse!(read_u8(cursor))?;
+
     match typecode {
-        //  Undefined - the empty value
         b'!' => Ok(LLSDValue::Undefined),
-        //  Boolean - 1 or 0
+
         b'0' => Ok(LLSDValue::Boolean(false)),
         b'1' => Ok(LLSDValue::Boolean(true)),
-        //  String - length followed by data
+
         b's' => Ok(LLSDValue::String(
-            std::str::from_utf8(&read_variable(cursor)?)?.to_string(),
+            parse!(std::str::from_utf8(&parse!(read_variable(cursor))?))?.to_string(),
         )),
-        //  URI - length followed by data
+
         b'l' => Ok(LLSDValue::URI(
-            std::str::from_utf8(&read_variable(cursor)?)?.to_string(),
+            parse!(std::str::from_utf8(&parse!(read_variable(cursor))?))?.to_string(),
         )),
-        //  Integer - 4 bytes
-        b'i' => Ok(LLSDValue::Integer(read_i32(cursor)?)),
-        //  Real - 4 bytes
-        b'r' => Ok(LLSDValue::Real(read_f64(cursor)?)),
-        //  UUID - 16 bytes
+
+        b'i' => Ok(LLSDValue::Integer(parse!(read_i32(cursor))?)),
+
+        b'r' => Ok(LLSDValue::Real(parse!(read_f64(cursor))?)),
+
         b'u' => {
             let mut buf: [u8; 16] = [0u8; 16];
-            cursor.read_exact(&mut buf)?; // read bytes of string
+            parse!(cursor.read_exact(&mut buf))?;
+
             Ok(LLSDValue::UUID(uuid::Uuid::from_bytes(buf)))
         }
-        //  Binary - length followed by data
-        b'b' => Ok(LLSDValue::Binary(read_variable(cursor)?)),
-        //  Date - 64 bits
-        b'd' => Ok(LLSDValue::Date(read_i64(cursor)?)),
-        //  Map -- keyed collection of items
+
+        b'b' => Ok(LLSDValue::Binary(parse!(read_variable(cursor))?)),
+
+        b'd' => Ok(LLSDValue::Date(parse!(read_i64(cursor))?)),
+
         b'{' => {
-            let mut dict: HashMap<String, LLSDValue> = HashMap::new(); // accumulate hash here
-            let count = read_u32(cursor)?; // number of items
+            let mut dict: HashMap<String, LLSDValue> = HashMap::new();
+            let count = parse!(read_u32(cursor))?;
+
             for _ in 0..count {
-                let keyprefix = &read_u8(cursor)?; // key should begin with b'k';
+                let keyprefix = parse!(read_u8(cursor))?;
+
                 match keyprefix {
                     b'k' => {
-                        let key = std::str::from_utf8(&read_variable(cursor)?)?.to_string();
-                        let _ = dict.insert(key, parse_value(cursor)?); // recurse and add, allowing dups
+                        let key = parse!(std::str::from_utf8(&parse!(read_variable(cursor))?))?
+                            .to_string();
+
+                        let _ = dict.insert(key, parse_value(cursor)?);
                     }
+
                     _ => {
-                        return Err(anyhow!(
+                        return Err(ParseError::new(anyhow!(
                             "Binary LLSD map key had {:?} instead of expected 'k'",
                             keyprefix
-                        ))
+                        )));
                     }
                 }
             }
-            if read_u8(cursor)? != b'}' {
-                return Err(anyhow!("Binary LLSD map did not end properly with }}"));
+
+            if parse!(read_u8(cursor))? != b'}' {
+                return Err(ParseError::new(anyhow!(
+                    "Binary LLSD map did not end properly with }}"
+                )));
             }
+
             Ok(LLSDValue::Map(dict))
         }
-        //  Array -- array of items
+
         b'[' => {
-            let mut array: Vec<LLSDValue> = Vec::new(); // accumulate hash here
-            let count = read_u32(cursor)?; // number of items
+            let mut array: Vec<LLSDValue> = Vec::new();
+            let count = parse!(read_u32(cursor))?;
+
             for _ in 0..count {
-                array.push(parse_value(cursor)?); // recurse and add, allowing dups
+                array.push(parse_value(cursor)?);
             }
-            if read_u8(cursor)? != b']' {
-                return Err(anyhow!("Binary LLSD array did not end properly with ] "));
+
+            if parse!(read_u8(cursor))? != b']' {
+                return Err(ParseError::new(anyhow!(
+                    "Binary LLSD array did not end properly with ]"
+                )));
             }
+
             Ok(LLSDValue::Array(array))
         }
 
-        _ => Err(anyhow!("Binary LLSD, unexpected type code {:?}", typecode)),
+        _ => Err(ParseError::new(anyhow!(
+            "Binary LLSD, unexpected type code {:?}",
+            typecode
+        ))),
     }
 }
-
 // Unit test
 
 #[test]
